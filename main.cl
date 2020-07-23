@@ -11,9 +11,6 @@
 ;;- http://www.franz.com/~jkf/coding_standards.html
 ;;-
 
-
-
-
 (in-package :net.aserve)
 
 (eval-when (:compile-toplevel) (declaim (optimize (speed 3))))
@@ -413,8 +410,8 @@ died. Use nil to specify no timeout.")
 ; object so it is the default for publish calls.
 ; Also bound to the current server object in accept threads, thus
 ; user response functions can use this to find the current wserver object.
-(defvar *wserver*)   
-
+(defvar *wserver*)  ; for port 80
+(defvar *ssl-server*)
 
 ; type of socket stream built.
 ; :hiper is possible in acl6
@@ -450,6 +447,11 @@ died. Use nil to specify no timeout.")
     :initform nil
     :initarg :socket
     :accessor wserver-socket)
+
+   (ssl-socket   ;; listening on port 443
+    :initform nil
+    :initarg :socket
+    :accessor wserver-ssl-socket)
      
    (enable-keep-alive ;; Set to nil or the timeout used by keep-alive
     :initform *http-header-read-timeout*
@@ -582,9 +584,13 @@ died. Use nil to specify no timeout.")
     :initarg :max-n-workers
     :reader wserver-max-n-workers)
      
-   (accept-thread   ;; thread accepting connetions and dispatching
+   (accept-thread   ;; thread accepting connections and dispatching
     :initform nil
     :accessor wserver-accept-thread)
+
+   (accept-ssl-thread ;; thread accepting HTTPS connections and dispatching
+    :initform nil
+    :accessor wserver-accept-ssl-thread)
 
    (link-scan-threads  ;; threads scanning cached entries for links
     :initform nil
@@ -654,8 +660,6 @@ died. Use nil to specify no timeout.")
     :accessor wserver-read-request-body-timeout)
 
    ))
-
-
 
 (defmethod print-object ((wserver wserver) stream)
   (print-unreadable-object (wserver stream :type t :identity t)
@@ -934,9 +938,6 @@ Problems with protocol may occur." (ef-name ef)))))
 	      (push (cons name ans) (request-headers req))
 	      ans))))
       
-
-
-
 (defsetf header-slot-value (req name) (newval)
   ;; set the header value regardless of where it is stored
   (let (ent)
@@ -1302,21 +1303,22 @@ by keyword symbols and not by strings"
 
   (declare (ignore debug))  ; for now
 
-  (declare (ignorable ssl-key verify ca-file ca-directory crl-file crl-check
-                      max-depth ssl-method))
+  (declare (ignorable ssl-key verify ca-file ca-directory crl-file
+		      crl-check max-depth ssl-method))
   
-  (if* debug-stream 
-     then (setq *aserve-debug-stream* 
-	    (if* (eq debug-stream t)
-	       then *standard-output*
-	       else debug-stream)))
+  (when debug-stream
+    (setq *aserve-debug-stream*
+	  (if (eq debug-stream t)
+	      *standard-output*
+	      debug-stream)))
+  
   (when (eq (type-of server) 'wserver)
     (setf (wserver-enable-compression server) compress))
-  (if* (eq server :new)
-     then (setq server (make-instance 'wserver
-			 :enable-compression compress)))
-
-  (if* efp then (setf (wserver-external-format server) external-format))
+  (when (eq server :new)
+    (setq server (make-instance 'wserver
+				:enable-compression compress)))
+  (when efp
+    (setf (wserver-external-format server) external-format))
 	  
   ;; the only required ssl arg is a certificate. check that a certificate has been specified here, so
   ;; that we can error immediately instead of when the first https connection is attempted.
@@ -1337,6 +1339,7 @@ by keyword symbols and not by strings"
 		  (bad-cert :certificate))
 		(when (and context (not (typep context 'excl::ssl-context)))
 		  (error "Invalid :context argument ~a." context))))
+      
       ;; for backward compatibility. ssl-args is preferred.
       (if* ssl
 	 then (when (not (string-or-pathname-p ssl))
@@ -1345,29 +1348,35 @@ by keyword symbols and not by strings"
     (setq accept-hook 
 	  #'(lambda (socket)
 	      #+(and sbcl cl+ssl)
-	      (funcall #'cl+ssl:make-ssl-server-stream
+	      (progn
+		(funcall #'cl+ssl:make-ssl-server-stream
 		       socket
 		       :external-format '(:iso-8859-1 :eol-style :crlf)
 		       :certificate (namestring ssl)
-		       :key (namestring ssl-key))
-	      #+(version>= 8 0)
-	  (let ((args (or ssl-args
-			  (list :certificate ssl
+		       :key (namestring ssl-key)))
+	      ;#-sbcl
+	      (progn
+		#+(version>= 8 0)
+		(let ((args (or ssl-args
+			      (list :certificate ssl
 				:certificate-password ssl-password
 				:key ssl-key
 				:verify verify
 				:ca-file ca-file
 				:ca-directory ca-directory
-				#+(version>= 8 2) :crl-file #+(version>= 8 2) crl-file
-				#+(version>= 8 2) :crl-check #+(version>= 8 2) crl-check
+				#+(version>= 8 2)
+				:crl-file #+(version>= 8 2) crl-file
+				#+(version>= 8 2)
+				:crl-check #+(version>= 8 2) crl-check
 				:method ssl-method
 				:max-depth max-depth))))
-	    (apply 'socket::make-ssl-server-stream socket args))
-	  #-(version>= 8 0)
-	  (funcall 'socket::make-ssl-server-stream socket
+		(apply 'socket::make-ssl-server-stream socket args))
+	      #-(version>= 8 0)
+	      (progn
+		(funcall 'socket::make-ssl-server-stream socket
 		   :certificate ssl
-		   :certificate-password ssl-password)
-	  ))
+		   :certificate-password ssl-password))))
+	  )
 
     (if* test-ssl
        then ;; test the accept hook to see if the
@@ -1386,11 +1395,11 @@ by keyword symbols and not by strings"
 		    (funcall accept-hook sock))
 		(progn (and sock  (close sock))
 		       (and psock (close psock))
-		       (and csock (close csock))))))
+		       (and csock (close csock)))))))
 	    
-    (if* (not port-p)
-       then ;; ssl defaults to port 443
-	    (setq port 443)))
+    ;;(if* (not port-p)
+    ;;   then ;; ssl defaults to port 443
+    ;;	    (setq port 443)))
 
   (setf (wserver-accept-hook server) accept-hook)
   
@@ -1402,11 +1411,10 @@ by keyword symbols and not by strings"
 	  (if* (typep proxy 'proxy-control)
 	     then (setf (wserver-proxy-control server) proxy)))
 
-  (if* (and (or restore-cache cache)
-	    os-processes)
-     then ; coordinating the cache between processes is something we're
-	  ; not ready to do ... *yet*.
-	  (error "Can't have caching and os-processes in the same server"))
+  (when (and (or restore-cache cache) os-processes)
+    ;; coordinating the cache between processes is something we're
+    ;; not ready to do ... *yet*.
+    (error "Can't have caching and os-processes in the same server"))
   
   #-unix
   (if* os-processes
@@ -1443,9 +1451,6 @@ by keyword symbols and not by strings"
 	      (add-disk-cache :server server
 			      :filename (car disk-cache)
 			      :size (cadr disk-cache)))))
-	    
-  
-
   
   (let* ((main-socket (socket:make-socket :connect :passive
 					  :local-port port
@@ -1453,7 +1458,6 @@ by keyword symbols and not by strings"
 					  :reuse-address t
 					  :format :bivalent
 					  :backlog backlog
-					  
 					  :type 
 					  *socket-stream-type*
 					  ))
@@ -1465,6 +1469,15 @@ by keyword symbols and not by strings"
       (if* (fixnump setuid) then (setuid setuid)))
     
     (setf (wserver-socket server) main-socket)
+    (when ssl
+      (setf (wserver-ssl-socket server)
+	    (socket:make-socket :connect :passive
+				:local-port 443
+				:local-host host
+				:reuse-address t
+				:format :bivalent
+				:backlog backlog
+				:type *socket-stream-type*)))
     (setf (wserver-terminal-io server) *terminal-io*)
     (setf (wserver-enable-chunking server) chunking)
     (setf (wserver-keep-alive-timeout server)
@@ -1512,8 +1525,7 @@ by keyword symbols and not by strings"
        elseif (and (fixnump listeners) (> listeners 0))
 	 then (start-lisp-thread-server listeners max-listeners)
 	 else (error "listeners should be nil or a non-negative fixnum, not ~s"
-		     listeners)))
-    
+		     listeners)))    
 
     (if* is-a-child then (loop (sleep 10000)))
     
@@ -1524,7 +1536,8 @@ by keyword symbols and not by strings"
 (defun shutdown (&key (server *wserver*) save-cache)
   ;; shutdown the neo server
   ; first kill off old processes if any
-  (let ((proc (wserver-accept-thread server)))
+  (let ((proc (wserver-accept-thread server))
+	(ssl-proc (wserver-accept-ssl-thread server)))
     (if* proc
 	 then ; we want this thread gone and the socket closed 
 					; so that we can reopen it if we want to.
@@ -1536,7 +1549,19 @@ by keyword symbols and not by strings"
 	 (mp:process-allow-schedule)
 	 (let ((oldsock (wserver-socket server)))
 	   (if* oldsock then (ignore-errors (close oldsock))))
-	 (setf (wserver-accept-thread server) nil)))
+	 (setf (wserver-accept-thread server) nil))
+    (if* ssl-proc
+	 then ; we want this thread gone and the socket closed 
+					; so that we can reopen it if we want to.
+	 #-sbcl
+	 (mp:process-kill ssl-proc)
+	 #+sbcl
+	 (sb-thread:destroy-thread ssl-proc)
+	 
+	 (mp:process-allow-schedule)
+	 (let ((oldsock (wserver-ssl-socket server)))
+	   (if* oldsock then (ignore-errors (close oldsock))))
+	 (setf (wserver-accept-ssl-thread server) nil)))
   
   (dolist (th (wserver-worker-threads server))
     (mp:process-kill th)
@@ -1552,9 +1577,6 @@ by keyword symbols and not by strings"
      then (save-proxy-cache save-cache :server server)
      else (kill-proxy-cache :server server)))
 
-
-
-
 (defun start-simple-server ()
   ;; do all the serving on the main thread so it's easier to
   ;; debug problems
@@ -1565,8 +1587,10 @@ by keyword symbols and not by strings"
 	(loop
 	  (restart-case
 	      (let ((sock (socket:accept-connection main-socket))
-		    (localhost))
-		(if* (not (member (setq localhost (socket:local-host sock))
+		    (localhost)
+		    (process-conn))
+		(if* (not (member (setq localhost
+					(socket:local-host sock))
 				  ipaddrs))
 		   then ; new ip address by which this machine is known
 			(push localhost ipaddrs)
@@ -1575,7 +1599,13 @@ by keyword symbols and not by strings"
 		   then (schedule-finalization 
 			 sock 
 			 #'check-for-open-socket-before-gc))
-		
+
+		(let ((socket-port (slot-value sock 'zacl::port)))
+		  (if (and (wserver-ssl-socket *wserver*)
+			   (= socket-port 80))
+		      (setf process-conn #'redirect-connection)
+		      (setf process-conn #'process-connection)))
+				
 		; disable the nagle alorithm
 		(socket:set-socket-options sock :nodelay t)
 		
@@ -1585,7 +1615,7 @@ by keyword symbols and not by strings"
 		 :read-timeout (wserver-io-timeout *wserver*)
 		 :write-timeout (wserver-io-timeout *wserver*))
 		       
-		(process-connection sock))
+		(funcall process-conn sock))
 	    
 	    (:loop ()  ; abort out of error without closing socket
 	      nil)))
@@ -1614,7 +1644,7 @@ by keyword symbols and not by strings"
 	
 (defun start-lisp-thread-server (listeners max-listeners)
   ;; start a server that consists of a set of lisp threads for
-  ;; doing work and a lisp thread for accepting connections
+  ;; doing work and lisp threads for accepting connections
   ;; and farming out the work
 
   (when max-listeners
@@ -1648,11 +1678,36 @@ by keyword symbols and not by strings"
 			    (atomic-incf *thread-index*))
 		 :initial-bindings (initial-bindings))
 	   #'http-accept-thread)))
+  
+  (when (not (wserver-accept-ssl-thread *wserver*))
+    (setf (wserver-accept-ssl-thread *wserver*)
+	  #+sbcl
+	  (let ((excl:*cl-default-special-bindings*
+		 (initial-bindings)))
+	    (sb-thread:make-thread
+	     #'http-accept-thread
+	     :name (format nil "~A-accept-ssl-~d"
+			   (if* *log-wserver-name*
+				then (wserver-name *wserver*)
+				else "aserve")
+			   (atomic-incf *thread-index*))
+	     :arguments '(t)))
+	  #-sbcl
+	  (mp:process-run-function
+	   (list :name (format nil "~A-accept-ssl-~d"
+			    (if* *log-wserver-name* 
+			       then (wserver-name *wserver*) 
+			       else "aserve")
+			    (atomic-incf *thread-index*))
+		 :initial-bindings (initial-bindings))
+	   #'http-accept-thread)))
 
   #-sbcl
   (setf (mp:process-keeps-lisp-alive-p (wserver-accept-thread *wserver*)) nil)
   
-  (wserver-accept-thread *wserver*)
+  (values
+   (wserver-accept-thread *wserver*)
+   (wserver-accept-ssl-thread *wserver*))
   )
 
 (defun below-max-n-workers-p (wserver)
@@ -1682,7 +1737,6 @@ by keyword symbols and not by strings"
     (setf (mp:process-keeps-lisp-alive-p proc) nil)
     ))
 
-
 (defun http-worker-thread ()
   ;; made runnable when there is an socket on which work is to be done
   (let ((*print-level* 5)
@@ -1693,14 +1747,23 @@ by keyword symbols and not by strings"
     ;; lots of circular data structures in the caching code.. we 
     ;; need to restrict the print level
     (loop
+       (let ((sock (dolist (rr (mp:process-run-reasons
+				sys:*current-process*))
+		     (when (streamp rr) (return rr))))
+	     (process-conn))
+	 (when (null sock)
+	   ;; started without a stream to process, must be because
+	   ;; we're being told to die, so abandon thread
+	   (return-from http-worker-thread nil))
 
-      (let ((sock (dolist (rr (mp:process-run-reasons sys:*current-process*))
-		    (if* (streamp rr) then (return rr)))))
-	(if* (null sock)
-	   then ; started without a stream to process, must be because
-		;; we're being told to die, so abandon thread
-		(return-from http-worker-thread nil))
-	
+	 (let ((socket-port (slot-value sock 'zacl::port)))
+	   (if (and (wserver-ssl-socket *wserver*)
+		    (= socket-port 80))
+	       (setf process-conn #'redirect-connection)
+	       (setf process-conn #'process-connection)
+	     ;; Redirect to listener on port 443
+	     ))
+	 
 	(restart-case
 	    (cond
 	     ;; Uses the top-level.debug:zoom, which only exists in ACL
@@ -1732,9 +1795,9 @@ by keyword symbols and not by strings"
 				   then ; after the zoom ignore the error
 					(go out))
 				))))
-		  (process-connection sock)) out))
+		  (funcall process-conn sock)) out))
 	     ((not (member :notrap *debug-current* :test #'eq))
-	      (handler-case (process-connection sock)
+	      (handler-case (funcall process-conn sock)
 		(error (cond)
 		  (if* (connection-reset-error cond)
 		     thenret ; don't print these errors,
@@ -1760,7 +1823,7 @@ by keyword symbols and not by strings"
 				(not (wserver-debug-connection-reset-by-peer *wserver*))
 				(connection-reset-error c))
 			     then (throw 'out-of-connection nil)))))
-		  (process-connection sock)))))
+		  (funcall process-conn sock)))))
 
 	  (abandon ()
 	      :report "Abandon this request and wait for the next one"
@@ -1782,35 +1845,39 @@ by keyword symbols and not by strings"
 	      #+aix (eq (stream-error-code c) 73) 
 	      )))
 
-(defun http-accept-thread ()
+(defun http-accept-thread (&optional (ssl-p nil))
   ;; loop doing accepts and processing them
   ;; ignore sporatic errors but stop if we get a few consecutive ones
   ;; since that means things probably aren't going to get better.
+  (format t "~&SSL-P: ~A~%" ssl-p)
   (let* ((error-count 0)
 	 (server *wserver*)
-	 (main-socket (wserver-socket server))
+	 (socket (if ssl-p
+		     (wserver-ssl-socket server)
+	  (wserver-socket server)
+	   )
+	 )
 	 (ipaddrs (wserver-ipaddrs server))
 	 (busy-sleeps 0))
     (unwind-protect
-
-	(loop
-	  (handler-case
-	      (let ((sock (socket:accept-connection main-socket))
+	 (loop
+	    (handler-case
+	      (let ((sock (socket:accept-connection socket))
 		    (localhost))
 		
-		; optional.. useful if we find that sockets aren't being
-		; closed
-		(if* *watch-for-open-sockets*
-		   then (schedule-finalization 
-			 sock 
-			 #'check-for-open-socket-before-gc))
+		;; optional.. useful if we find that sockets aren't 
+		;; being closed
+		(when *watch-for-open-sockets*
+		  (schedule-finalization
+		   sock #'check-for-open-socket-before-gc))
 		
-		; track all the ipaddrs by which we're reachable
-		(if* (not (member (setq localhost (socket:local-host sock))
-				  ipaddrs))
-		   then ; new ip address by which this machine is known
-			(push localhost ipaddrs)
-			(setf (wserver-ipaddrs *wserver*) ipaddrs))
+		;; track all the ipaddrs by which we're reachable
+		(when (not (member (setq localhost
+					 (socket:local-host sock))
+				   ipaddrs))
+		  ;; new ip address by which this machine is
+		  ;; known (push localhost ipaddrs)
+		  (setf (wserver-ipaddrs *wserver*) ipaddrs))
 		
 		#+io-timeout
 		(socket:socket-control 
@@ -1820,11 +1887,13 @@ by keyword symbols and not by strings"
 		
 		; another useful test to see if we're losing file
 		; descriptors
-                (if* *max-socket-fd*
-		   then (let ((fd (excl::stream-input-fn sock)))
-			  (if* (atomic-setf-max *max-socket-fd* fd)
-                             then (logmess (format nil 
-                                                   "Maximum socket file descriptor number is now ~d" fd)))))
+                (when *max-socket-fd*
+		  (let ((fd (excl::stream-input-fn sock)))
+		    (when (atomic-setf-max *max-socket-fd* fd)
+		      (logmess
+		       (format nil
+			       "Maximum socket file descriptor number is now ~d"
+			       fd)))))
 		
 		(setq error-count 0) ; reset count
 	
@@ -1833,7 +1902,9 @@ by keyword symbols and not by strings"
 		; for one so we can handle cases where the workers are all busy
 		(let ((looped 0))
 		  (loop
-                    (multiple-value-bind (worker found-worker-p) (dequeue (wserver-free-worker-threads server) :wait 1)
+		     (multiple-value-bind (worker found-worker-p)
+			 (dequeue (wserver-free-worker-threads server)
+				  :wait 1)
                       (if* found-worker-p
                          then (incf-free-workers server -1)
                               (mp:process-add-run-reason worker sock)
@@ -1868,11 +1939,15 @@ by keyword symbols and not by strings"
 	      (if* (> (incf error-count) 4)
 		 then (logmess "accept: too many errors, bailing")
 		      (return-from http-accept-thread nil)))))
-      (ignore-errors (progn
-		       (with-locked-server (server)
-			 (if* (eql (wserver-socket server) main-socket)
-			    then (setf (wserver-socket server) nil)))
-		       (close main-socket))))))
+      (ignore-errors
+	(progn
+	  (with-locked-server (server)
+	    (if ssl-p
+		(when (eql (wserver-ssl-socket server) socket)
+		  (setf (wserver-ssl-socket server) nil))
+		(when (eql (wserver-socket server) socket)
+		  (setf (wserver-socket server) nil))))
+	  (close socket))))))
       
 (defun start-cmd ()
   ;; start using the command line arguments
@@ -1895,34 +1970,26 @@ by keyword symbols and not by strings"
 	  (format t " got error ~a~%" cond)
 	  (format t "restarting~%"))))))
 
-
-(defun process-connection (sock)
-  ;; read an http request from the socket and process
-  ;; it.
-  ;; If the response indicates 'keep alive' then loop around for
-  ;; another request.
-  ;; When this function returns the given socket has been closed.
-  ;;
-  
+(defun redirect-connection (sock)
   (unwind-protect
-      (let ((header-read-timeout (wserver-header-read-timeout *wserver*))
-            req error-obj error-response (chars-seen (list nil)))
+       (let ((header-read-timeout
+	      (wserver-header-read-timeout *wserver*))
+	     req error-obj error-response (chars-seen (list nil)))
 
-	;; run the accept hook on the socket if there is one
-	(let ((ahook (wserver-accept-hook *wserver*)))	  
-	  (if* ahook then (setq sock (funcall ahook sock))))
+	 ;; run the accept hook on the socket if there is one
 	;; get first command
 	(loop
 	  (multiple-value-setq (req error-obj error-response)
 	    (ignore-errors
-	     (mp:with-timeout (header-read-timeout
-			       (debug-format :info "total header read timeout")
-			       (values nil nil *response-request-timeout*))
-			     
-	       (with-timeout-local ((wserver-read-request-timeout *wserver*)
-				    (debug-format :info "request timed out on read")
-				    (values nil nil *response-request-timeout*))
-		 (read-http-request sock chars-seen)))))
+	      (mp:with-timeout
+		  (header-read-timeout
+		   (debug-format :info "total header read timeout")
+		   (values nil nil *response-request-timeout*))
+		(with-timeout-local
+		    ((wserver-read-request-timeout *wserver*)
+		     (debug-format :info "request timed out on read")
+		     (values nil nil *response-request-timeout*))
+		  (read-http-request sock chars-seen)))))
 	  
 	  (if* (null req)
 	     then ; end of file, means do nothing
@@ -1939,7 +2006,82 @@ by keyword symbols and not by strings"
 		  ; notify the client if it's still listening
 		  (if* (car chars-seen)
 		     then (ignore-errors
-			   (let ((code (or error-response *response-bad-request*)))
+			    (let ((code (or error-response
+					    *response-bad-request*)))
+			     (format sock "HTTP/1.0 ~d  ~a~aContent-Length: 0~aConnection: close~a~a"
+				     (response-number code)
+				     (response-desc code)
+				     *crlf* *crlf* *crlf* *crlf*))
+			   (force-output sock)))
+		   
+		  (return-from redirect-connection nil)
+		  
+		  else ;; got a request
+		  (let* ((method (request-method req))
+			 (protocol (request-protocol-string req))
+			 (host (uri-host (request-uri req)))
+			 (path (request-decoded-uri-path req))
+			 (code *response-moved-permanently*))
+		    
+		    (format sock "~A ~D ~A~ALocation: https://~A~A~A~A"
+			    protocol
+			    (response-number code)
+			    (response-desc code)
+			    *crlf* host path *crlf* *crlf*)	     
+		     (force-output sock))
+		  )))
+    ;; do it in two stages since each one could error and both have
+    ;; to be attempted
+    (ignore-errors (force-output-noblock sock))
+    (ignore-errors (close sock :abort t))))
+
+(defun process-connection (sock)
+  ;; read an http request from the socket and process
+  ;; it.
+  ;; If the response indicates 'keep alive' then loop around for
+  ;; another request.
+  ;; When this function returns the given socket has been closed.
+  ;;
+  (unwind-protect
+       (let ((header-read-timeout
+	      (wserver-header-read-timeout *wserver*))
+	     req error-obj error-response (chars-seen (list nil)))
+
+	 ;; run the accept hook on the socket if there is one	 
+	(let ((ahook (wserver-accept-hook *wserver*))) 
+	  (when ahook (setq sock (funcall ahook sock))))
+	
+	;; get first command
+	(loop
+	  (multiple-value-setq (req error-obj error-response)
+	    (ignore-errors
+	      (mp:with-timeout
+		  (header-read-timeout
+		   (debug-format :info "total header read timeout")
+		   (values nil nil *response-request-timeout*))
+		(with-timeout-local
+		    ((wserver-read-request-timeout *wserver*)
+		     (debug-format :info "request timed out on read")
+		     (values nil nil *response-request-timeout*))
+		  (read-http-request sock chars-seen)))))
+	  
+	  (if* (null req)
+	     then ; end of file, means do nothing
+		  ; (logmess "eof when reading request")
+		  ; end this connection by closing socket
+		  (if* error-obj
+		     then (logmess 
+			   (format nil "While reading http request~:_ from ~a:~:_ ~a" 
+				   (socket:ipaddr-to-dotted 
+				    (socket::remote-host sock))
+				   error-obj)
+                           :brief))
+
+		  ; notify the client if it's still listening
+		  (if* (car chars-seen)
+		     then (ignore-errors
+			    (let ((code (or error-response
+					    *response-bad-request*)))
 			     (format sock "HTTP/1.0 ~d  a~aContent-Length: 0~aConnection: close~a~a"
 				     (response-number code)
 				     (response-desc code)
@@ -1950,12 +2092,16 @@ by keyword symbols and not by strings"
 	     else ;; got a request
 		  (setq *worker-request* req) 
 		  
-		  (setf (request-request-date req) (get-universal-time))
-                  (setf (request-request-microtime req) (get-micro-real-time))
+		  (setf (request-request-date req)
+			(get-universal-time))
+                  (setf (request-request-microtime req)
+			(get-micro-real-time))
 
 		  (handle-request req)
-		  (setf (request-reply-date req) (get-universal-time))
-                  (setf (request-reply-microtime req) (get-micro-real-time))
+		  (setf (request-reply-date req)
+			(get-universal-time))
+                  (setf (request-reply-microtime req)
+			(get-micro-real-time))
 		  
 		  (force-output-noblock (request-socket req))
 
@@ -1972,12 +2118,14 @@ by keyword symbols and not by strings"
                             ;; For keep-alive sockets the header-read-timeout is now governed by
                             ;; keep-alive timeout. Update the header-read-timeout so the timeout
                             ;; timers are set properly for the next pass through the loop.
-                            (setf header-read-timeout (wserver-keep-alive-timeout *wserver*))
+		       (setf header-read-timeout
+			     (wserver-keep-alive-timeout *wserver*))
                             (debug-format :info "request over, keep socket alive with timeout of ~d"
                                           header-read-timeout)
                             (force-output-noblock sock)
                             (setf (car chars-seen) nil) ; for next use
-                            (excl::socket-bytes-written (request-socket req) 0)
+                            (excl::socket-bytes-written
+			     (request-socket req) 0)
                        else (return))))))
     ;; do it in two stages since each one could error and both have
     ;; to be attempted
@@ -1990,6 +2138,7 @@ by keyword symbols and not by strings"
   ; 30 seconds is enough time to wait
   (with-timeout-local (30) 
     (force-output stream)))
+
 (defun read-http-request (sock chars-seen)
   ;; read the request from the socket and return and http-request
   ;; object and an indication if any characters were read
@@ -2045,7 +2194,6 @@ by keyword symbols and not by strings"
 
 	    (if* (null (net.uri:uri-path uri))
 	       then (setf (net.uri:uri-path uri) "/"))
-
 	    
 	    (setq req (make-instance 'http-request
 			:method cmd
@@ -2077,7 +2225,8 @@ by keyword symbols and not by strings"
 	    ; insert the host name and port into the uri
 	    (let ((host (header-slot-value req :host)))
 	      (if* host
-		 then (let ((colonpos (find-it #\: host 0 (length host)))
+		   then (let ((colonpos (find-it #\: host 0
+						 (length host)))
 			    (uri (request-uri req))
 			    (port))
 			(if* colonpos
@@ -2100,9 +2249,11 @@ by keyword symbols and not by strings"
 			
 			;; set virtual host in the request
 			(let ((vhost 
-			       (gethash host (wserver-vhosts *wserver*))))
+			       (gethash host
+					(wserver-vhosts *wserver*))))
 			  (setf (request-vhost req)
-			    (or vhost (wserver-default-vhost *wserver*))))
+				(or vhost
+				    (wserver-default-vhost *wserver*))))
 					      
 			))))
 	  
