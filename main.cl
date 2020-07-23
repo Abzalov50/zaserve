@@ -1306,19 +1306,19 @@ by keyword symbols and not by strings"
   (declare (ignorable ssl-key verify ca-file ca-directory crl-file
 		      crl-check max-depth ssl-method))
   
-  (if* debug-stream 
-     then (setq *aserve-debug-stream* 
-	    (if* (eq debug-stream t)
-	       then *standard-output*
-	       else debug-stream)))
+  (when debug-stream
+    (setq *aserve-debug-stream*
+	  (if (eq debug-stream t)
+	      *standard-output*
+	      debug-stream)))
   
   (when (eq (type-of server) 'wserver)
     (setf (wserver-enable-compression server) compress))
   (when (eq server :new)
     (setq server (make-instance 'wserver
 				:enable-compression compress)))
-
-  (if* efp then (setf (wserver-external-format server) external-format))
+  (when efp
+    (setf (wserver-external-format server) external-format))
 	  
   ;; the only required ssl arg is a certificate. check that a certificate has been specified here, so
   ;; that we can error immediately instead of when the first https connection is attempted.
@@ -1339,6 +1339,7 @@ by keyword symbols and not by strings"
 		  (bad-cert :certificate))
 		(when (and context (not (typep context 'excl::ssl-context)))
 		  (error "Invalid :context argument ~a." context))))
+      
       ;; for backward compatibility. ssl-args is preferred.
       (if* ssl
 	 then (when (not (string-or-pathname-p ssl))
@@ -1347,29 +1348,35 @@ by keyword symbols and not by strings"
     (setq accept-hook 
 	  #'(lambda (socket)
 	      #+(and sbcl cl+ssl)
-	      (funcall #'cl+ssl:make-ssl-server-stream
+	      (progn
+		(funcall #'cl+ssl:make-ssl-server-stream
 		       socket
 		       :external-format '(:iso-8859-1 :eol-style :crlf)
 		       :certificate (namestring ssl)
-		       :key (namestring ssl-key))
-	      #+(version>= 8 0)
-	  (let ((args (or ssl-args
-			  (list :certificate ssl
+		       :key (namestring ssl-key)))
+	      ;#-sbcl
+	      (progn
+		#+(version>= 8 0)
+		(let ((args (or ssl-args
+			      (list :certificate ssl
 				:certificate-password ssl-password
 				:key ssl-key
 				:verify verify
 				:ca-file ca-file
 				:ca-directory ca-directory
-				#+(version>= 8 2) :crl-file #+(version>= 8 2) crl-file
-				#+(version>= 8 2) :crl-check #+(version>= 8 2) crl-check
+				#+(version>= 8 2)
+				:crl-file #+(version>= 8 2) crl-file
+				#+(version>= 8 2)
+				:crl-check #+(version>= 8 2) crl-check
 				:method ssl-method
 				:max-depth max-depth))))
-	    (apply 'socket::make-ssl-server-stream socket args))
-	  #-(version>= 8 0)
-	  (funcall 'socket::make-ssl-server-stream socket
+		(apply 'socket::make-ssl-server-stream socket args))
+	      #-(version>= 8 0)
+	      (progn
+		(funcall 'socket::make-ssl-server-stream socket
 		   :certificate ssl
-		   :certificate-password ssl-password)
-	  ))
+		   :certificate-password ssl-password))))
+	  )
 
     (if* test-ssl
        then ;; test the accept hook to see if the
@@ -1388,7 +1395,7 @@ by keyword symbols and not by strings"
 		    (funcall accept-hook sock))
 		(progn (and sock  (close sock))
 		       (and psock (close psock))
-		       (and csock (close csock))))))
+		       (and csock (close csock)))))))
 	    
     ;;(if* (not port-p)
     ;;   then ;; ssl defaults to port 443
@@ -1404,11 +1411,10 @@ by keyword symbols and not by strings"
 	  (if* (typep proxy 'proxy-control)
 	     then (setf (wserver-proxy-control server) proxy)))
 
-  (if* (and (or restore-cache cache)
-	    os-processes)
-     then ; coordinating the cache between processes is something we're
-	  ; not ready to do ... *yet*.
-	  (error "Can't have caching and os-processes in the same server"))
+  (when (and (or restore-cache cache) os-processes)
+    ;; coordinating the cache between processes is something we're
+    ;; not ready to do ... *yet*.
+    (error "Can't have caching and os-processes in the same server"))
   
   #-unix
   (if* os-processes
@@ -1454,7 +1460,7 @@ by keyword symbols and not by strings"
 					  :backlog backlog
 					  :type 
 					  *socket-stream-type*
-					  ))	 
+					  ))
 	 (is-a-child))
 
     #+unix
@@ -1555,7 +1561,7 @@ by keyword symbols and not by strings"
 	 (mp:process-allow-schedule)
 	 (let ((oldsock (wserver-ssl-socket server)))
 	   (if* oldsock then (ignore-errors (close oldsock))))
-	 (setf (wserver-accept-ssl-thread server) nil))))
+	 (setf (wserver-accept-ssl-thread server) nil)))
   
   (dolist (th (wserver-worker-threads server))
     (mp:process-kill th)
@@ -1581,8 +1587,10 @@ by keyword symbols and not by strings"
 	(loop
 	  (restart-case
 	      (let ((sock (socket:accept-connection main-socket))
-		    (localhost))
-		(if* (not (member (setq localhost (socket:local-host sock))
+		    (localhost)
+		    (process-conn))
+		(if* (not (member (setq localhost
+					(socket:local-host sock))
 				  ipaddrs))
 		   then ; new ip address by which this machine is known
 			(push localhost ipaddrs)
@@ -1591,7 +1599,13 @@ by keyword symbols and not by strings"
 		   then (schedule-finalization 
 			 sock 
 			 #'check-for-open-socket-before-gc))
-		
+
+		(let ((socket-port (slot-value sock 'zacl::port)))
+		  (if (and (wserver-ssl-socket *wserver*)
+			   (= socket-port 80))
+		      (setf process-conn #'redirect-connection)
+		      (setf process-conn #'process-connection)))
+				
 		; disable the nagle alorithm
 		(socket:set-socket-options sock :nodelay t)
 		
@@ -1601,7 +1615,7 @@ by keyword symbols and not by strings"
 		 :read-timeout (wserver-io-timeout *wserver*)
 		 :write-timeout (wserver-io-timeout *wserver*))
 		       
-		(process-connection sock))
+		(funcall process-conn sock))
 	    
 	    (:loop ()  ; abort out of error without closing socket
 	      nil)))
@@ -1735,12 +1749,21 @@ by keyword symbols and not by strings"
     (loop
        (let ((sock (dolist (rr (mp:process-run-reasons
 				sys:*current-process*))
-		     (when (streamp rr) (return rr)))))
+		     (when (streamp rr) (return rr))))
+	     (process-conn))
 	 (when (null sock)
 	   ;; started without a stream to process, must be because
 	   ;; we're being told to die, so abandon thread
 	   (return-from http-worker-thread nil))
-	
+
+	 (let ((socket-port (slot-value sock 'zacl::port)))
+	   (if (and (wserver-ssl-socket *wserver*)
+		    (= socket-port 80))
+	       (setf process-conn #'redirect-connection)
+	       (setf process-conn #'process-connection)
+	     ;; Redirect to listener on port 443
+	     ))
+	 
 	(restart-case
 	    (cond
 	     ;; Uses the top-level.debug:zoom, which only exists in ACL
@@ -1772,9 +1795,9 @@ by keyword symbols and not by strings"
 				   then ; after the zoom ignore the error
 					(go out))
 				))))
-		  (process-connection sock)) out))
+		  (funcall process-conn sock)) out))
 	     ((not (member :notrap *debug-current* :test #'eq))
-	      (handler-case (process-connection sock)
+	      (handler-case (funcall process-conn sock)
 		(error (cond)
 		  (if* (connection-reset-error cond)
 		     thenret ; don't print these errors,
@@ -1800,7 +1823,7 @@ by keyword symbols and not by strings"
 				(not (wserver-debug-connection-reset-by-peer *wserver*))
 				(connection-reset-error c))
 			     then (throw 'out-of-connection nil)))))
-		  (process-connection sock)))))
+		  (funcall process-conn sock)))))
 
 	  (abandon ()
 	      :report "Abandon this request and wait for the next one"
@@ -1826,11 +1849,14 @@ by keyword symbols and not by strings"
   ;; loop doing accepts and processing them
   ;; ignore sporatic errors but stop if we get a few consecutive ones
   ;; since that means things probably aren't going to get better.
+  (format t "~&SSL-P: ~A~%" ssl-p)
   (let* ((error-count 0)
 	 (server *wserver*)
 	 (socket (if ssl-p
 		     (wserver-ssl-socket server)
-		     (wserver-socket server)))
+	  (wserver-socket server)
+	   )
+	 )
 	 (ipaddrs (wserver-ipaddrs server))
 	 (busy-sleeps 0))
     (unwind-protect
@@ -1944,6 +1970,70 @@ by keyword symbols and not by strings"
 	  (format t " got error ~a~%" cond)
 	  (format t "restarting~%"))))))
 
+(defun redirect-connection (sock)
+  (unwind-protect
+       (let ((header-read-timeout
+	      (wserver-header-read-timeout *wserver*))
+	     req error-obj error-response (chars-seen (list nil)))
+
+	 ;; run the accept hook on the socket if there is one
+	;; get first command
+	(loop
+	  (multiple-value-setq (req error-obj error-response)
+	    (ignore-errors
+	      (mp:with-timeout
+		  (header-read-timeout
+		   (debug-format :info "total header read timeout")
+		   (values nil nil *response-request-timeout*))
+		(with-timeout-local
+		    ((wserver-read-request-timeout *wserver*)
+		     (debug-format :info "request timed out on read")
+		     (values nil nil *response-request-timeout*))
+		  (read-http-request sock chars-seen)))))
+	  
+	  (if* (null req)
+	     then ; end of file, means do nothing
+		  ; (logmess "eof when reading request")
+		  ; end this connection by closing socket
+		  (if* error-obj
+		     then (logmess 
+			   (format nil "While reading http request~:_ from ~a:~:_ ~a" 
+				   (socket:ipaddr-to-dotted 
+				    (socket::remote-host sock))
+				   error-obj)
+                           :brief))
+
+		  ; notify the client if it's still listening
+		  (if* (car chars-seen)
+		     then (ignore-errors
+			    (let ((code (or error-response
+					    *response-bad-request*)))
+			     (format sock "HTTP/1.0 ~d  ~a~aContent-Length: 0~aConnection: close~a~a"
+				     (response-number code)
+				     (response-desc code)
+				     *crlf* *crlf* *crlf* *crlf*))
+			   (force-output sock)))
+		   
+		  (return-from redirect-connection nil)
+		  
+		  else ;; got a request
+		  (let* ((method (request-method req))
+			 (protocol (request-protocol-string req))
+			 (host (uri-host (request-uri req)))
+			 (path (request-decoded-uri-path req))
+			 (code *response-moved-permanently*))
+		    
+		    (format sock "~A ~D ~A~ALocation: https://~A~A~A~A"
+			    protocol
+			    (response-number code)
+			    (response-desc code)
+			    *crlf* host path *crlf* *crlf*)	     
+		     (force-output sock))
+		  )))
+    ;; do it in two stages since each one could error and both have
+    ;; to be attempted
+    (ignore-errors (force-output-noblock sock))
+    (ignore-errors (close sock :abort t))))
 
 (defun process-connection (sock)
   ;; read an http request from the socket and process
@@ -1952,15 +2042,15 @@ by keyword symbols and not by strings"
   ;; another request.
   ;; When this function returns the given socket has been closed.
   ;;
-  
   (unwind-protect
        (let ((header-read-timeout
 	      (wserver-header-read-timeout *wserver*))
 	     req error-obj error-response (chars-seen (list nil)))
 
-	;; run the accept hook on the socket if there is one
+	 ;; run the accept hook on the socket if there is one	 
 	(let ((ahook (wserver-accept-hook *wserver*))) 
 	  (when ahook (setq sock (funcall ahook sock))))
+	
 	;; get first command
 	(loop
 	  (multiple-value-setq (req error-obj error-response)
@@ -2104,7 +2194,6 @@ by keyword symbols and not by strings"
 
 	    (if* (null (net.uri:uri-path uri))
 	       then (setf (net.uri:uri-path uri) "/"))
-
 	    
 	    (setq req (make-instance 'http-request
 			:method cmd
@@ -2136,7 +2225,8 @@ by keyword symbols and not by strings"
 	    ; insert the host name and port into the uri
 	    (let ((host (header-slot-value req :host)))
 	      (if* host
-		 then (let ((colonpos (find-it #\: host 0 (length host)))
+		   then (let ((colonpos (find-it #\: host 0
+						 (length host)))
 			    (uri (request-uri req))
 			    (port))
 			(if* colonpos
@@ -2159,9 +2249,11 @@ by keyword symbols and not by strings"
 			
 			;; set virtual host in the request
 			(let ((vhost 
-			       (gethash host (wserver-vhosts *wserver*))))
+			       (gethash host
+					(wserver-vhosts *wserver*))))
 			  (setf (request-vhost req)
-			    (or vhost (wserver-default-vhost *wserver*))))
+				(or vhost
+				    (wserver-default-vhost *wserver*))))
 					      
 			))))
 	  
