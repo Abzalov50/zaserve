@@ -43,8 +43,7 @@
 		   :initform ""
 		   :accessor webaction-project-prefix
 		   )
-   
-   
+      
    ; prefix of where regular files are found
    (destination :initarg :destination
 		:initform ""
@@ -277,12 +276,8 @@
 (defun .inv-websession-from-req (req websession)
   (setf (getf (request-reply-plist req) 'websession) websession))
 
-
-
 (defun webaction-from-ent (ent)
   (getf (entity-plist ent) 'webaction))
-
-
 
 (defun webaction-entity (req ent
                          ;; use-actions is used in an internal recursive call
@@ -304,8 +299,6 @@
     
     ; look for session info based on cookie
     ; and remember it on the request
-
-    
     (let (csessid)
       (if* (and (null websession)
 		(setq sm (webaction-websession-master wa))
@@ -324,9 +317,6 @@
 		      (setf (gethash csessid (sm-websessions sm)) websession)))
       (if* websession 
 	 then  (setf (websession-from-req req) websession)))
-    
-    
-
     #+ignore
     (if* websession
        then (format t "in action key  ~s data ~s~%"
@@ -363,9 +353,7 @@
                                     key (if* (webaction-session-cookie-only wa)
                                            then :do-cookie
                                            else :try-cookie)))))))
-		
-	      
-
+    
     (if* websession then (note-websession-referenced websession))
     
     (let* ((following (match-prefix (webaction-project-prefix wa)
@@ -385,8 +373,6 @@
 		(setq final-flags (let ((last (last actions)))
 				    (if* (consp (car last))
 				       then (car last))))
-		
-		
 		(if* (and actions
 			  (not (listp (car actions))))
 		   then ; this isn't the case of an entry followed
@@ -558,9 +544,6 @@ no map for webaction with default-actions ~s"
     
     (values realname postfix)))
 
-
-
-
 (defun strip-websessionid (req wa following websession)
   ;; strip leading session id if any
   ;; setup the current session on the request object
@@ -617,8 +600,6 @@ no map for webaction with default-actions ~s"
 	    following)))
   
 
-
-
 (defun locate-actions (req ent wa action-name)
   ;; retrieve a list of actions for the symbolic page name
   ;;
@@ -666,7 +647,7 @@ no map for webaction with default-actions ~s"
   (if* filename
      then (concatenate 'string
 	    (substitute #\/ #\\
-			(namestring (path-pathname
+			(namestring (excl:path-pathname
 				     (enough-namestring
 				      (merge-pathnames (pathname filename))
 				      (pathname (webaction-destination wa))))))
@@ -693,7 +674,6 @@ no map for webaction with default-actions ~s"
 	 (if* (not (eq (aref prefix i) (aref full i))) then (return nil)))))
 	     
   
-  
 (defun modify-request-path (req prefix newpath)
   ;; modify the http request with the new path
   ;; the new path can be relative or absolute
@@ -709,8 +689,6 @@ no map for webaction with default-actions ~s"
   (setf (request-raw-uri req)
     (net.uri:copy-uri (request-raw-uri req)
 		      :path newpath)))
-
-
 
 (defun webaction-cleanup-process ()
   ;; clean up all old sessions in all active webactions
@@ -742,9 +720,3 @@ no map for webaction with default-actions ~s"
 	    
 	    *webaction-cleanup-process*
 	    )))
-
-
-  
-
-	       
-	       

@@ -1679,7 +1679,10 @@ by keyword symbols and not by strings"
 		 :initial-bindings (initial-bindings))
 	   #'http-accept-thread)))
   
-  (when (not (wserver-accept-ssl-thread *wserver*))
+  (when (and (wserver-ssl-socket *wserver*)
+	     (not (wserver-accept-ssl-thread *wserver*)))
+    (print "DACC DACC")
+    (sleep 5)
     (setf (wserver-accept-ssl-thread *wserver*)
 	  #+sbcl
 	  (let ((excl:*cl-default-special-bindings*
@@ -1853,7 +1856,7 @@ by keyword symbols and not by strings"
 	 (server *wserver*)
 	 (socket (if ssl-p
 		     (wserver-ssl-socket server)
-	  (wserver-socket server)
+		     (wserver-socket server)
 	   )
 	 )
 	 (ipaddrs (wserver-ipaddrs server))
