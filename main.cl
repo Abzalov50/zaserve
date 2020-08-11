@@ -1849,7 +1849,6 @@ by keyword symbols and not by strings"
   ;; loop doing accepts and processing them
   ;; ignore sporatic errors but stop if we get a few consecutive ones
   ;; since that means things probably aren't going to get better.
-  (format t "~&SSL-P: ~A~%" ssl-p)
   (let* ((error-count 0)
 	 (server *wserver*)
 	 (socket (if ssl-p
