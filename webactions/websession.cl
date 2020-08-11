@@ -47,8 +47,6 @@
 (defun make-instance-websession-master+cookie-name+reap-hook-function  (name reap-hook-function)
   (make-instance 'websession-master :cookie-name name :reap-hook-function reap-hook-function))
 
-
-
 (defclass websession ()
   ;; individual sessions
   (
@@ -87,8 +85,6 @@
 (defun make-instance-websession+key+method (key method)
   (make-instance 'websession :key key :method method))
 
-
-
 (defmethod initialize-websession-master ((sm websession-master))
   ;; we no longer do this here.. we wait until we start to use
   ;; the keys that way a saved image will get new info when
@@ -103,7 +99,7 @@
   (dotimes (i (logand (get-universal-time) #xfff)) (random 256))
   
   #+unix
-  (dotimes (i (logand (excl::filesys-inode ".") #xfff)) (random 256))
+  ;;(dotimes (i (logand (excl::filesys-inode ".") #xfff)) (random 256))
   (dotimes (i (logand (get-universal-time) #xff)) (random 256))
   
   (let ((val 1))
@@ -116,8 +112,6 @@
       (setq val (+ (ash val 8) (random 255))))
     (setf (sm-suffix sm) val))
 )
-
-
 
 (defvar *websession-counter-lock* (mp:make-process-lock))
 
@@ -135,9 +129,6 @@
       (concatenate 'string (sm-prefix sm)
 		   (format nil "~x" (random #xfffffff))
 		   (format nil "~x" (logxor (sm-suffix sm) counterval))))))
-
-    
-  
 
 (defvar *verify-reaper-started* 0)
 
@@ -193,10 +184,6 @@
       (debug-format :info " flush session ~s" (websession-key websession))
       (force-output)
       (remhash (websession-key websession) (sm-websessions sm)))))
-
-  
-  
-  
   
 (defun kill-websession (req ent)
   ;; remove the session associated with this req/ent

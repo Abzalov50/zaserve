@@ -6,8 +6,6 @@
 ;; See the file LICENSE for the full license governing this code.
 ;;
 ;;
-
-
 (in-package :net.aserve)
 
 (eval-when (compile) (declaim (optimize (speed 3))))
@@ -22,7 +20,6 @@
   (render-uri (copy-uri (request-uri req) :path (path ent))
 	      *html-stream*)
   (write-string "\">" *html-stream*))
-
 
 
 (defun locate-any-value (req args name)
@@ -46,6 +43,7 @@
       (:session
        (websession-variable (websession-from-req req) name)))))
 
+#|
 (defsetf locate-any-value .inv-locate-any-value)
 
 (defun .inv-locate-any-value (req args name value)
@@ -62,7 +60,7 @@
        (setf (request-query-value name req) value))
       (:session
        (setf (websession-variable (websession-from-req req) name) value)))))
-  
+|#
 (defun cvt-to-integer (value)
   ;; convert value to an integer if possible
   (if* (integerp value)
@@ -206,9 +204,6 @@
 	    (emit-clp-entity req ent body))))
 
 
-
-
-
 (def-clp-function clp_ifdef (req ent args body)
   ;; name=varname
   ;;
@@ -227,9 +222,7 @@
   (let ((name (cdr (assoc "name" args :test #'equal))))
     (if* (not (and name (locate-any-value req args name)))
        then ; process the body
-	    (net.aserve::emit-clp-entity req ent body))))
-
-
+       (net.aserve::emit-clp-entity req ent body))))
 
 (def-clp-function clp_ifequal (req ent args body)
   ;; name=varname

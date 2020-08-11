@@ -31,9 +31,6 @@
 			    
 	   ))))
 
-
-
-	      
 	      
 (def-clp-function wa_showerrors (req ent args body)
   (declare (ignore ent body))

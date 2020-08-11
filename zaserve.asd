@@ -54,13 +54,13 @@ For the legacy PortableAllegroserve, please try system name `paserve'.
  :components
  ;; this list is in load.cl as well... keep in sync
  ((:module "htmlgen" :components ((zacl-reader:cl-file "htmlgen")
-                                  (:static-file "ChangeLog")))
+                                  (:static-file "ChangeLog")))  
   (zacl-reader:cl-file "packages")
   (zacl-reader:cl-file "macs")
   (zacl-reader:cl-file "queue")
   (zacl-reader:cl-file "main")
   (zacl-reader:cl-file "headers")
-  (zacl-reader:cl-file "parse")
+   (zacl-reader:cl-file "parse")
   (zacl-reader:cl-file "decode")
   (zacl-reader:cl-file "publish")
   (zacl-reader:cl-file "authorize")
@@ -69,6 +69,20 @@ For the legacy PortableAllegroserve, please try system name `paserve'.
   (zacl-reader:cl-file "proxy")
   (zacl-reader:cl-file "cgi")
   (zacl-reader:cl-file "chunker")
+  
+  (:module "webactions"
+	   :components ((zacl-reader:cl-file "websession")
+			(zacl-reader:cl-file "webact")			
+			(zacl-reader:cl-file "clpage")
+			(:module "clpcode"
+				 :components
+				 ((zacl-reader:cl-file "clp")	  
+				  (zacl-reader:cl-file "http")
+				  (zacl-reader:cl-file "time")
+				  (zacl-reader:cl-file "wa"))
+				 :depends-on ("clpage")
+				  ))			
+			)
   #+include-playback (zacl-reader:cl-file "playback")
 
   (:static-file "README.md")
@@ -78,7 +92,8 @@ For the legacy PortableAllegroserve, please try system name `paserve'.
   (:static-file "load"))
  :perform (asdf:load-op :before (op zaserve)
 			(check-platform-compatibilty))
- :serial t)
+ ;:serial t
+ )
 
 
 

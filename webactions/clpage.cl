@@ -22,10 +22,6 @@ v1: 1.13: cosmetic: bump version #; code same as 10.0 initial release."
   :type :system
   :post-loadable t)
 
-
-
-
-
 (eval-when (compile load eval) (require :aserve))
 
 (in-package :net.aserve)
@@ -139,14 +135,6 @@ v1: 1.13: cosmetic: bump version #; code same as 10.0 initial release."
        else
 	    (standard-directory-entity-publisher req ent realname info))))
 	    
-    
-
-	     
-
-
-
-
-
 (defmethod process-entity ((req http-request) (ent clp-entity))
   ;; emit a clp file
   ;;
@@ -190,8 +178,6 @@ v1: 1.13: cosmetic: bump version #; code same as 10.0 initial release."
 	       (if* (not (eql (cdr dep)
 			      (file-write-date (car dep))))
 		  then (return t)))
-		   
-		   
 	     )
        then (parse-clp-file ent))
   
@@ -214,7 +200,8 @@ v1: 1.13: cosmetic: bump version #; code same as 10.0 initial release."
 (defun insert-cookie (req ent sm wa websession)
   ;; set our cookie if needed
   (if* (and websession
-            (member (websession-method websession) '(:try-cookie :do-cookie))
+            (member (websession-method websession)
+		    '(:try-cookie :do-cookie))
             (or sm  ; sm already known, otherwise compute it
                 (and (setq wa (getf (entity-plist ent) 'webaction))
                      (setq sm (webaction-websession-master wa)))))
@@ -255,8 +242,6 @@ v1: 1.13: cosmetic: bump version #; code same as 10.0 initial release."
       (logmess (format nil "processing clp file ~s got error ~a"
 		       (file ent)
 		       c)))))
-
-
 
 (defun parse-clp-filename (filename external-format)
   ;; parse the clp file
@@ -311,21 +296,12 @@ v1: 1.13: cosmetic: bump version #; code same as 10.0 initial release."
     (dolist (subdep (expand-clp-includes (nth 4 obj) filename external-format))
       (pushnew subdep deps :test #'equal))))
 
-			
-			
-		
-		  
-
-
+					       
 (defun tparse (filename)
   (with-open-file (p filename)
     (let ((res (parse-clp-guts p filename)))
       (expand-clp-includes res filename)
       res)))
-
-
-
-
 
 (defun parse-clp-guts (p filename)
   (let ((result)
@@ -622,11 +598,6 @@ v1: 1.13: cosmetic: bump version #; code same as 10.0 initial release."
 			      (setq state 2))
 			 (t (push ch valuechars))))))))))))
 			     
-	
-	
-    
-
-
 
 (defun scan-for-end-tag (p module fcn)
   ;; look for </module_fcn>
@@ -735,9 +706,6 @@ v1: 1.13: cosmetic: bump version #; code same as 10.0 initial release."
 		 (t (setq state 0))))))))))
 
 
-
-
-
 (defun emit-clp-entity (req ent objects)
   ;; send objects in the clp to the output stream
   (dolist (obj objects)
@@ -750,10 +718,6 @@ v1: 1.13: cosmetic: bump version #; code same as 10.0 initial release."
 		   (let ((func (find-clp-module-function mod fcn)))
 		     (if* func
 			then (funcall func req ent args body)))))))))
-
-
-		   
-
 
 (defvar *clp-modules* (make-hash-table :test #'equal))
 
@@ -769,10 +733,6 @@ v1: 1.13: cosmetic: bump version #; code same as 10.0 initial release."
   (let ((mod (find-clp-module module)))
     (and mod (gethash function mod))))
 
-	
-
-
-  
 ;; define a clp handler
 ; args to lambda are   req ent args body
 ;;
@@ -795,11 +755,6 @@ to separate the module part from the function name part, ~s doesn't" name))
     
     `(setf (gethash ,function
 		    (find-clp-module ,module :create t))
-       (named-function (:clp ,name) (lambda ,args ,@body)))))
-
-
-
-
-
+       #'(lambda ,args ,@body))))
 
 (provide :webactions)

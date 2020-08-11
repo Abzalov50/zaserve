@@ -1,3 +1,4 @@
+;; -*- mode: common-lisp; package: net.aserve -*-
 ;;
 ;; load up the webaction code.
 ;;

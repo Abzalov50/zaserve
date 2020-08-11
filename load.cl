@@ -1,3 +1,4 @@
+;; -*- mode: common-lisp; package: net.aserve -*-
 ;; load in aserve
 
 ;
@@ -110,8 +111,6 @@
       "webactions/test/sitea/file2.clp"
       "webactions/test/sitea/file3.clp"))
       
-
-    
 ;; end experimental
 
 (eval-when (compile eval load)
