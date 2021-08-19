@@ -668,7 +668,7 @@
 (def-std-html :kbd  	t nil)
 (def-std-html :keygen  	nil nil)
 
-(def-std-html :label  	t nil)
+(def-std-html :label  	t :for)
 (def-std-html :layer  	t nil)
 (def-std-html :legend  	t nil)
 (def-std-html :li  	t nil)
@@ -698,6 +698,7 @@
 
 (def-std-html :p  	t nil)
 (def-std-html :param  	t nil)
+(def-std-html :path  	t nil)
 (def-std-html :plaintext  nil nil)
 (def-std-html :progress	t nil)
 (def-std-html :pre  	t nil)
@@ -724,6 +725,7 @@
 (def-std-html :sub  	t nil)
 (def-std-html :summary 	t nil)
 (def-std-html :sup  	t nil)
+(def-std-html :svg  	t nil)
 
 (def-std-html :table  	t :name)
 (def-std-html :tbody  	t nil)

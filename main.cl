@@ -1681,7 +1681,6 @@ by keyword symbols and not by strings"
   
   (when (and (wserver-ssl-socket *wserver*)
 	     (not (wserver-accept-ssl-thread *wserver*)))
-    (print "DACC DACC")
     (sleep 5)
     (setf (wserver-accept-ssl-thread *wserver*)
 	  #+sbcl
@@ -3297,16 +3296,19 @@ in get-multipart-sequence"))
 				   :external-format external-format)))))
 	      
       (if* post
-	 then (if* (and (member (request-method req) '(:post :put))
+	   then
+	   (if* (and (member (request-method req) '(:post :put))
 			(search ; sometimes other stuff added we can ignore
 			 "application/x-www-form-urlencoded"
 			 (header-slot-value req :content-type))
+			
 			)
 		 then (setf res
 			(append res
 				(form-urlencoded-to-query
 				 (get-request-body req)
-				 :external-format external-format)))))
+				 :external-format external-format)))
+		 ))
       (setf (getf (request-reply-plist req) 'request-query-sig)
 	signature)
       (setf (request-query-alist req) res))))
