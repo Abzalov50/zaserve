@@ -3017,7 +3017,9 @@ in get-multipart-sequence"))
 		      then 
 			   ; here is where we should do
 			   ; external format processing
-			   #+(and allegro (version>= 6 0 pre-final 1))
+		      ;;#+(and allegro (version>= 6 0 pre-final 1))
+		      #-sbcl
+		      (progn
 			   (multiple-value-setq (buffer items tocopy)
 			     (octets-to-string
 			      mpbuffer
@@ -3027,8 +3029,9 @@ in get-multipart-sequence"))
 			      :string-start start
 			      :string-end (length buffer)
 			      :external-format external-format
-			      :truncate t))
-			   #-(and allegro (version>= 6 0 pre-final 1))
+			      :truncate t)))
+		      ;;#-(and allegro (version>= 6 0 pre-final 1))
+		      #+sbcl
 			   (dotimes (i tocopy)
 			     (setf (aref buffer (+ start i))
 			       (code-char (aref mpbuffer (+ cur i)))))
@@ -3121,6 +3124,7 @@ in get-multipart-sequence"))
 		  (:text (make-string size))
 		  (:binary (make-array size :element-type '(unsigned-byte 8))))
 		index 0))
+       
       (let ((nextindex (get-multipart-sequence 
 			req buffer 
 			:start index
@@ -3141,7 +3145,6 @@ in get-multipart-sequence"))
 			(push buffer res)
 			(setq buffer nil))
 	   else (setq index nextindex))))
-      
     ; read it all, data in res
     (if* (zerop total-size)
        then (case type
@@ -3166,27 +3169,10 @@ in get-multipart-sequence"))
 		(incf to (length (car buffs))))
 	      result))))
 
-		     
-	      
-		
-	  
-	  
-		
-    
-    
-  
-  
-
+		    
 ;; end multipart code
 
-
-
-
-
-
-
-		      
-	      
+      
 (defun read-sequence-with-timeout (string length sock timeout)
   ;; read length bytes into sequence, timing out after timeout
   ;; seconds
@@ -3202,8 +3188,6 @@ in get-multipart-sequence"))
 		  (if* (>= got length ) then (return string))))))))
 		
     
-      
-
 (defun read-sock-line (sock buffer start chars-seen)
   (declare (optimize (speed 3))
 	   (type fixnum start)
