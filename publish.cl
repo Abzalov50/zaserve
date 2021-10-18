@@ -2682,8 +2682,9 @@
   ;;
   (setf (request-reply-stream req) (request-socket req)))
 
-(defvar *far-in-the-future*
-    (encode-universal-time 12 32 12 11 8 2020 0))
+(defun far-in-the-future (&optional (n-years 29))
+    ;; Approximately 29 years in the future.
+    (+ (get-universal-time) (* n-years 365 24 60 60)))
 
 (defmethod set-cookie-header ((req http-request)
 			      &key name value expires domain 
@@ -2720,10 +2721,12 @@
 		(string value))))
     
     (if* expires
-       then (if* (eq expires :never)
-	       then (setq expires *far-in-the-future*))
-	    (if* (integerp expires)
-	       then (setq res (concatenate 'string
+	 then (if* (eq expires :never)
+	       then 
+	       (setq expires (far-in-the-future)))
+	 (if* (integerp expires)
+	       then 
+	       (setq res (concatenate 'string
 				res
 				"; expires="
 				(universal-time-to-date expires)))
