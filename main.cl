@@ -2992,6 +2992,7 @@ in get-multipart-sequence"))
 	  cur      (mp-info-cur mp-info))
 
     (loop
+       ;;(print "OOOOO")
       (case (mp-info-state mp-info)
 	((:header :boundary :last-boundary)
 	 ; no data left
@@ -3018,9 +3019,12 @@ in get-multipart-sequence"))
 			   ; here is where we should do
 			   ; external format processing
 		      ;;#+(and allegro (version>= 6 0 pre-final 1))
-		      #-sbcl
+		      #+sbcl
 		      (progn
-			   (multiple-value-setq (buffer items tocopy)
+			;;(print buffer)
+			;;(print mpbuffer)
+			;;(print "OKKKKK")
+			   (let* ((buf
 			     (octets-to-string
 			      mpbuffer
 			      :string buffer
@@ -3029,10 +3033,25 @@ in get-multipart-sequence"))
 			      :string-start start
 			      :string-end (length buffer)
 			      :external-format external-format
-			      :truncate t)))
+			      :truncate t))
+				 (buf-conv
+				  (coerce (coerce buf 'list)
+					  'vector))
+				 )
+			     ;;(format t "~&BUFFER: ~A~%" buf)
+			     (dotimes (i (length buf-conv))
+			       (setf (aref buffer i)
+				     (aref buf-conv i)))
+			     )
+			   ;;(format t "~&BUFFER 2: ~A~%" buffer)
+			   ;;(print "JBEBEBEB")
+			   )
 		      ;;#-(and allegro (version>= 6 0 pre-final 1))
-		      #+sbcl
-			   (dotimes (i tocopy)
+		      #-sbcl
+		      (dotimes (i tocopy)
+			(print mpbuffer)
+			(print (aref mpbuffer (+ cur i)))
+			(print (code-char (aref mpbuffer (+ cur i))))
 			     (setf (aref buffer (+ start i))
 			       (code-char (aref mpbuffer (+ cur i)))))
 		      else 
@@ -3050,7 +3069,8 @@ in get-multipart-sequence"))
 			   (return-from get-multipart-sequence 
 			     (+ start items))))
 	  elseif (eq kind :partial)
-	    then  ; may be a boundary, can't tell
+	  then  ; may be a boundary, can't tell
+	  ;;(print "Y")
 		 (if* (null (shift-buffer-up-and-read mp-info))
 		    then ; no more data, partial will never match
 			 ; so return the partial, this special
@@ -3060,7 +3080,9 @@ in get-multipart-sequence"))
 			 )
 	  elseif (or (eq kind :boundary)
 		     (eq kind :last-boundary))
-	    then ; hit a boundary, nothing more to return
+	  then ; hit a boundary, nothing more to return
+	  ;;(print "Z")
+	  ;;(print buffer)
 		 (setf (mp-info-state mp-info) kind
 		       (mp-info-cur   mp-info) pos)
 		 (return-from get-multipart-sequence nil)))))))
@@ -3124,11 +3146,15 @@ in get-multipart-sequence"))
 		  (:text (make-string size))
 		  (:binary (make-array size :element-type '(unsigned-byte 8))))
 		index 0))
-       
+       ;;(print "1")
+       ;;(print buffer)
       (let ((nextindex (get-multipart-sequence 
 			req buffer 
 			:start index
 			:external-format external-format)))
+	;;(print buffer)
+	;;(print "XXX")
+	;;(print nextindex)
 	(if* (null nextindex)
 	   then (if* (> index 0)
 		   then (incf total-size index)
