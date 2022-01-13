@@ -47,7 +47,7 @@ For the legacy PortableAllegroserve, please try system name `paserve'.
  :author "John K. Foderaro"
  :licence "LLGPL"
  :description "Lightly modified fork of original AllegroServe for portability" 
- :depends-on (:zacl :cl+ssl :salza2)
+ :depends-on (:zacl :cl+ssl :salza2 :ironclad :cl-ppcre)
  :defsystem-depends-on (:zacl)
  :version "1.3.65"
  :name "AllegroServe"
@@ -69,6 +69,7 @@ For the legacy PortableAllegroserve, please try system name `paserve'.
   (zacl-reader:cl-file "proxy")
   (zacl-reader:cl-file "cgi")
   (zacl-reader:cl-file "chunker")
+  (zacl-reader:cl-file "secure-cookie")
   
   (:module "webactions"
 	   :components ((zacl-reader:cl-file "websession")

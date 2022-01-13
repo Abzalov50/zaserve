@@ -114,7 +114,7 @@ without compression.  Original error loading deflate was:~%~a~%~:@>" c)
 	      (setq sys::*user-warned-about-deflate* t)))))
 
 (defpackage :net.aserve
-  (:use :common-lisp :excl :net.html.generator :net.uri :util.zip)
+  (:use :common-lisp :excl :net.html.generator :net.uri :util.zip :cl-ppcre :ironclad)
   (:export
    #:allegroserve-error
    #:allegroserve-error-action
@@ -275,7 +275,13 @@ without compression.  Original error loading deflate was:~%~a~%~:@>" c)
    #:*response-internal-server-error*
    #:*response-not-implemented*
    #:*response-service-unavailable*
-   #:*wserver*))
+   #:*wserver*
+
+   #:set-secret-key-base
+   #:set-secure-cookie
+   #:get-secure-cookie
+
+   ))
 
 
 (defpackage :net.aserve.client 
