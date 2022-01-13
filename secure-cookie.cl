@@ -157,5 +157,5 @@ Adapted by: Arnold N'GORAN <arnoldngoran@gmail.com>
 		  (logmess
 		   (format nil "*** WARNING: Failed to decode or decrypt cookie value! ~S" c))))))))
 
-(defun delete-secure-cookie (name req)
-  (set-secure-cookie req :name name :value ""))
+(defun delete-secure-cookie (name req &key domain)
+  (set-secure-cookie req :name name :value "" :domain domain))
