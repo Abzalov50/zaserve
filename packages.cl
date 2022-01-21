@@ -280,6 +280,7 @@ without compression.  Original error loading deflate was:~%~a~%~:@>" c)
    #:set-secret-key-base
    #:set-secure-cookie
    #:get-secure-cookie
+   #:delete-secure-cookie
 
    ))
 
