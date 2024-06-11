@@ -1,0 +1,13 @@
+(undo-tree-save-format-version . 1)
+"5161d42c8d4a4c2cf3ca5e97223c6d95345134b0"
+[nil nil nil nil (26213 29027 644675 609000) 0 nil]
+([nil nil ((5574 . 5575) (t 24753 4266 832830 988000)) nil (26213 29027 644674 589000) 0 nil])
+([nil nil ((#("{" 0 1 (face font-lock-string-face fontified t)) . -5574) (undo-tree-id1 . -1) 5575) nil (26213 29027 644673 909000) 0 nil])
+([nil nil ((5574 . 5577)) nil (26213 29027 644672 780000) 0 nil])
+([nil nil ((5577 . 5578)) nil (26213 29027 644672 460000) 0 nil])
+([nil nil ((5578 . 5579)) nil (26213 29027 644671 989000) 0 nil])
+([nil nil ((5874 . 5880)) nil (26213 29027 644671 580000) 0 nil])
+([nil nil ((nil rear-nonsticky nil 5904 . 5905) (nil fontified nil 5880 . 5905) (5880 . 5905)) nil (26213 29027 644671 49000) 0 nil])
+([nil nil ((#("raw-request" 0 11 (fontified t)) . -5889) (undo-tree-id0 . -11) 5900) nil (26213 29027 644669 969000) 0 nil])
+([nil current ((5889 . 5894)) nil (26213 29027 644648 160000) 0 nil])
+nil

@@ -137,7 +137,7 @@ for :access which allows for more flexibility in presentation.")
                      #+(and allegro (version>= 6))
                      (excl::socket-bytes-written 
                       (request-socket req)))))
-    (format nil "~A~A~a - - [~a] ~s ~s ~s"
+    (format nil "~A~A~a - - [~a] [~a] ~s ~s ~s"
             (if* *log-wserver-name* 
                then (wserver-name *wserver*) 
                else "")
@@ -146,6 +146,7 @@ for :access which allows for more flexibility in presentation.")
                else "")
             (socket:ipaddr-to-dotted ipaddr)
             (maybe-universal-time-to-date time)
+	    (request-vhost req)
             (request-raw-request req)
             code
             (or length -1))))

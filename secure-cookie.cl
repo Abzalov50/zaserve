@@ -64,7 +64,9 @@ Adapted by: Arnold N'GORAN <arnoldngoran@gmail.com>
 
 ;; generate random IV
 (defun generate_iv ()
-  (ironclad:make-random-salt (ironclad:block-length 'ironclad:aes)))
+  (ironclad:make-random-salt (ironclad:block-length 'ironclad:aes))
+  ;;(ironclad:make-random-salt 8)
+  )
 
 ;; use AES-CBC-256 cipher default
 ;; return: cipher
@@ -100,13 +102,16 @@ Adapted by: Arnold N'GORAN <arnoldngoran@gmail.com>
 ;; value: cookie-value (string)
 ;; return base64 of encrypted value of "data|value|mac"
 (defun encrypt-and-encode (name value)
+  (format t "~&VALUE: ~A~%" value)
   (let ((mac (ironclad:make-hmac (sign-key) 'ironclad:SHA256))
         (iv (generate_iv))
         (content (babel:string-to-octets value :encoding :utf-8 )))
     (ironclad:encrypt-in-place (get-cipher (encrypt-key) iv) content)
-    (let* ((new-content (concatenate 'vector iv content)) ; include the IV
-           (pack (pack-cookie name new-content)))
+    (let* ((new-content (concatenate '(vector (unsigned-byte 8)) iv content)) ; include the IV
+           (pack (pack-cookie name new-content)))      
+      (format t "~&PACK: ~A~%" pack) 
       (ironclad:update-hmac mac (babel:string-to-octets pack :encoding :utf-8))
+      (print (pack-signature name pack (ironclad:hmac-digest mac)))
       (cl-base64:string-to-base64-string (pack-signature name pack (ironclad:hmac-digest mac))))))
 
 ;; return nil if failed to decrypt/decode/hmac-verify

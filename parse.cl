@@ -153,11 +153,6 @@
       
       (values cmd url prot))))
 
-
-
-
-
-
 (defun new-read-request-headers (req sock)
   ;; use the new strategy to read in the request headers
   ;;

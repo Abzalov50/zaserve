@@ -645,6 +645,8 @@
 (def-std-html :frame        t nil)
 (def-std-html :frameset        t nil)
 
+(def-std-html :g        t nil)
+
 (def-std-html :h1        t nil)
 (def-std-html :h2        t nil)
 (def-std-html :h3        t nil)
@@ -705,6 +707,7 @@
 
 (def-std-html :q  	t nil)
 
+(def-std-html :rect  t nil)
 (def-std-html :rp  	t nil)
 (def-std-html :rt  	t nil)
 (def-std-html :ruby  	t nil)
@@ -730,6 +733,7 @@
 (def-std-html :table  	t :name)
 (def-std-html :tbody  	t nil)
 (def-std-html :td  	t nil)
+(def-std-html :text  t nil)
 (def-std-html :textarea  t nil)
 (def-std-html :tfoot  	t nil)
 (def-std-html :th  	t nil)
